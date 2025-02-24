@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure--2*5i&h3f_^xc3foj__3z%hsvu-#zoh3x*rtc$d*7$(9cuhyse
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -51,7 +51,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-#ROOT_URLCONF = 'slack_bot.urls'
+ROOT_URLCONF = 'myapp.urls'
 
 TEMPLATES = [
     {
