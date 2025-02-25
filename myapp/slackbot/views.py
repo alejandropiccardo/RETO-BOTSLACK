@@ -1,9 +1,10 @@
 import json
 import os
 import requests
+import schedule
+import time
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
-import os
 from dotenv import load_dotenv
 
 load_dotenv()  # Cargar las variables del archivo .env
@@ -24,10 +25,7 @@ def slack_events(request):
         if 'event' in data and data['event']['type'] == 'app_mention':
             channel_id = data['event']['channel']
 
-            response = requests.get(
-                f'https://slack.com/api/conversations.members?channel={channel_id}',
-                headers={'Authorization': f'Bearer {SLACK_BOT_TOKEN}'}
-            )
+            response = get_channel_info(channel_id)
 
             if response.status_code == 200:
                 members_ids = response.json().get('members', [])
@@ -43,6 +41,12 @@ def slack_events(request):
 
     return JsonResponse({'error': 'Método de solicitud no válido'}, status=405)
 
+def get_channel_info(channel_id):
+    response = requests.get(
+        f'https://slack.com/api/conversations.members?channel={channel_id}',
+        headers={'Authorization': f'Bearer {SLACK_BOT_TOKEN}'}
+    )
+    return response
 
 def get_user_info(user_id):
     response = requests.get(
@@ -62,4 +66,7 @@ def get_user_email(user_id):
         user_info = response.json().get('user', {})
         return user_info.get('profile', {}).get('email', 'Desconocido')
     return 'Desconocido'
+    
 
+def scheduled_job():
+    schedule.every().day.at("10:30").do(send_message)
