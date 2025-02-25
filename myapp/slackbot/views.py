@@ -66,7 +66,3 @@ def get_user_email(user_id):
         user_info = response.json().get('user', {})
         return user_info.get('profile', {}).get('email', 'Desconocido')
     return 'Desconocido'
-    
-
-def scheduled_job():
-    schedule.every().day.at("10:30").do(send_message)
