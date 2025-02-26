@@ -24,12 +24,13 @@ def slack_events(request):
             channel_id = data['event']['channel']
 
             response = get_channel_info(channel_id)
-
+        
             if response.status_code == 200:
                 members_ids = response.json().get('members', [])
+                print(members_ids)
                 members_names = [get_user_info(user_id) for user_id in members_ids]
                 members_emails = [get_user_email(user_id) for user_id in members_ids]
-
+                send_group_msg("PRUEBA",members_ids)
                 print(members_emails)
                 return JsonResponse({'members': members_names})
 
@@ -240,3 +241,38 @@ def open_config_channel_modal(trigger_id):
 
     response = requests.post(url, headers=headers, json=data)
 
+def send_group_msg(msg, user_list):
+    # 1️⃣ Abrir una conversación grupal
+    url_open = "https://slack.com/api/conversations.open"
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    payload_open = {
+        "users": ",".join(user_list) 
+    }
+
+    response_open = requests.post(url_open, json=payload_open, headers=headers)
+    data_open = response_open.json()
+    
+    if not data_open.get("ok"):
+        print(f"Error creando grupo: {data_open.get('error')}")
+        return None
+
+    channel_id = data_open["channel"]["id"]  # ID del canal grupal
+
+        # Enviar el mensaje al grupo
+    url_msg = "https://slack.com/api/chat.postMessage"
+    payload_msg = {
+        "channel": channel_id,
+        "text": msg
+    }
+
+    response_msg = requests.post(url_msg, json=payload_msg, headers=headers)
+    data_msg = response_msg.json()
+
+    if not data_msg.get("ok"):
+        print(f"Error enviando mensaje: {data_msg.get('error')}")
+    
+    return data_msg
