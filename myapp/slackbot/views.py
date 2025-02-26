@@ -1,9 +1,7 @@
 import json
 import os
 import requests
-import schedule
-import time
-from django.http import JsonResponse, HttpResponseBadRequest
+from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from dotenv import load_dotenv
 
@@ -41,6 +39,61 @@ def slack_events(request):
 
     return JsonResponse({'error': 'Método de solicitud no válido'}, status=405)
 
+
+@csrf_exempt
+def slack_commands(request):
+    if request.method == 'POST':
+        if 'command' in request.POST:
+            command = request.POST['command']
+            if command == '/config-channel':
+                trigger_id = request.POST.get('trigger_id')
+                open_config_channel_modal(trigger_id)
+                return HttpResponse(status=200)
+            # elif command == '/otro-command':
+            #     ...
+
+        if 'payload' in request.POST:
+            payload = json.loads(request.POST['payload'])
+            # print("Payload completo:", json.dumps(payload, indent=2))
+            
+            callback_id = payload['view']['callback_id']
+            
+            if payload.get('type') == 'view_submission' and callback_id == 'config_channel_modal':
+                try:
+                    state_values = payload['view']['state']['values']
+
+                    freq_days_str = state_values['meeting_frequency_days_block']['meeting_frequency_days']['value']
+                    duration_str = state_values['duration_minutes_block']['duration_minutes']['value']
+                    group_size_str = state_values['group_size_block']['group_size']['value']
+                    user_props_str = state_values['user_properties_configuration_block']['user_properties_configuration']['value']
+                    meeting_sched_str = state_values['meeting_schedule_configuration_block']['meeting_schedule_configuration']['value']
+
+                    freq_days = int(freq_days_str) if freq_days_str.strip().isdigit() else None
+                    duration = int(duration_str) if duration_str.strip().isdigit() else None
+                    group_size = int(group_size_str) if group_size_str.strip().isdigit() else None
+                    
+
+                    try:
+                        user_props = json.loads(user_props_str)
+                    except json.JSONDecodeError:
+                        user_props = user_props_str  # Si no es JSON válido, guardamos el texto tal cual
+
+                    try:
+                        meeting_sched = json.loads(meeting_sched_str)
+                    except json.JSONDecodeError:
+                        meeting_sched = meeting_sched_str  
+
+                except Exception as e:
+                    print("Error al extraer datos del modal:", e)
+
+                return HttpResponse(status=200)
+
+            return HttpResponse(status=200)
+
+        return HttpResponseBadRequest("No es un slash command o payload válido")
+
+    return HttpResponseBadRequest("Método no permitido")
+
 def get_channel_info(channel_id):
     response = requests.get(
         f'https://slack.com/api/conversations.members?channel={channel_id}',
@@ -66,3 +119,124 @@ def get_user_email(user_id):
         user_info = response.json().get('user', {})
         return user_info.get('profile', {}).get('email', 'Desconocido')
     return 'Desconocido'
+
+def get_channel_list():
+    response = requests.get(
+        'https://slack.com/api/conversations.list',
+        headers={'Authorization': f'Bearer {SLACK_BOT_TOKEN}'}
+    )
+    if response.status_code == 200:
+        response = response.json().get('channels', [])
+        response = [{'id': channel['id'], 'name': channel['name']} for channel in response]
+        return response
+    return []
+
+def open_config_channel_modal(trigger_id):
+    url = "https://slack.com/api/views.open"
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "trigger_id": trigger_id,
+        "view": {
+            "type": "modal",
+            "callback_id": "config_channel_modal",
+            "title": {
+                "type": "plain_text",
+                "text": "Configurar Canal"
+            },
+            "submit": {
+                "type": "plain_text",
+                "text": "Guardar"
+            },
+            "blocks": [
+                {
+                    "type": "input",
+                    "block_id": "meeting_frequency_days_block",
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "meeting_frequency_days",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Ej: 15 (número de días)"
+                        }
+                    },
+                    "label": {
+                        "type": "plain_text",
+                        "text": "Frecuencia de reuniones (días)"
+                    }
+                },
+                {
+                    "type": "input",
+                    "block_id": "duration_minutes_block",
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "duration_minutes",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Ej: 30 (minutos)"
+                        }
+                    },
+                    "label": {
+                        "type": "plain_text",
+                        "text": "Duración (minutos)"
+                    }
+                },
+                {
+                    "type": "input",
+                    "block_id": "group_size_block",
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "group_size",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Ej: 10 (número de integrantes)"
+                        }
+                    },
+                    "label": {
+                        "type": "plain_text",
+                        "text": "Tamaño de grupo (group_size)"
+                    }
+                },
+                {
+                    "type": "input",
+                    "block_id": "user_properties_configuration_block",
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "user_properties_configuration",
+                        "multiline": True,
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Ingrese propiedades de usuario en formato JSON, por ejemplo: {\"rol\": \"admin\"}"
+                        }
+                    },
+                    "label": {
+                        "type": "plain_text",
+                        "text": "User properties config (JSON)"
+                    }
+                },
+                {
+                    "type": "input",
+                    "block_id": "meeting_schedule_configuration_block",
+                    "element": {
+                        "type": "plain_text_input",
+                        "action_id": "meeting_schedule_configuration",
+                        "multiline": True,
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Ingrese la configuración de agenda en formato JSON"
+                        }
+                    },
+                    "label": {
+                        "type": "plain_text",
+                        "text": "Meeting schedule config (JSON)"
+                    }
+                }
+            ]
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+
